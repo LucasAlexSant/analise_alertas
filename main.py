@@ -41,11 +41,11 @@ def identificar_padrao_dominante(results):
     padroes_detectados = []
     
     # 1. PERIODICIDADE FORTE (Intervalo fixo: 8 em 8h, 12 em 12h, etc)
-    if results['periodicity'].get('has_strong_periodicity', False):
+    if results.get('periodicity', {}).get('has_strong_periodicity', False):
         periodo_horas = results['periodicity'].get('dominant_period_hours')
         
         if periodo_horas:
-            confianca = 90 if results['regularity']['regularity_score'] > 80 else 75
+            confianca = 90 if results.get('regularity', {}).get('regularity_score', 0) > 80 else 75
             
             # Classificar o tipo de período
             if periodo_horas < 1:
@@ -212,6 +212,12 @@ def gerar_regra_customizada(results, df, intervals_hours):
     Returns:
         dict: Regra com parâmetros específicos
     """
+    # Validar que results tem os campos necessários
+    required_keys = ['regularity', 'periodicity', 'predictability', 'basic_stats']
+    for key in required_keys:
+        if key not in results or results[key] is None:
+            return gerar_regra_generica()
+    
     padrao_principal, padroes_secundarios = identificar_padrao_dominante(results)
     
     if not padrao_principal:
@@ -814,17 +820,61 @@ class AdvancedRecurrenceAnalyzer:
         
         # Executar análises essenciais sem interface
         results = {}
-        results['basic_stats'] = self._analyze_basic_statistics_silent(intervals_hours)
-        results['regularity'] = self._analyze_regularity_silent(intervals_hours)
-        results['periodicity'] = self._analyze_periodicity_silent(intervals_hours)
-        results['autocorr'] = self._analyze_autocorrelation_silent(intervals_hours)
-        results['predictability'] = self._calculate_predictability_silent(intervals_hours)
-        results['markov'] = self._analyze_markov_chains_silent(intervals_hours)
-        results['randomness'] = self._advanced_randomness_tests_silent(intervals_hours)
-        results['stability'] = self._analyze_stability_silent(intervals_hours)
-        results['temporal'] = self._analyze_temporal_patterns_silent(df)
-        results['bursts'] = self._detect_bursts_silent(intervals_hours)
-        results['contextual'] = self._analyze_contextual_dependencies_silent(df)
+        
+        try:
+            results['basic_stats'] = self._analyze_basic_statistics_silent(intervals_hours)
+        except Exception:
+            results['basic_stats'] = {'mean': 0, 'median': 0, 'std': 0, 'cv': 0}
+        
+        try:
+            results['regularity'] = self._analyze_regularity_silent(intervals_hours)
+        except Exception:
+            results['regularity'] = {'cv': 0, 'regularity_score': 0}
+        
+        try:
+            results['periodicity'] = self._analyze_periodicity_silent(intervals_hours)
+        except Exception:
+            results['periodicity'] = {'has_strong_periodicity': False, 'has_moderate_periodicity': False, 'dominant_period_hours': None}
+        
+        try:
+            results['autocorr'] = self._analyze_autocorrelation_silent(intervals_hours)
+        except Exception:
+            results['autocorr'] = {'max_autocorr': 0}
+        
+        try:
+            results['predictability'] = self._calculate_predictability_silent(intervals_hours)
+        except Exception:
+            results['predictability'] = {'predictability_score': 0, 'next_expected_hours': 0}
+        
+        try:
+            results['markov'] = self._analyze_markov_chains_silent(intervals_hours)
+        except Exception:
+            results['markov'] = {'markov_score': 0}
+        
+        try:
+            results['randomness'] = self._advanced_randomness_tests_silent(intervals_hours)
+        except Exception:
+            results['randomness'] = {'overall_randomness_score': 50}
+        
+        try:
+            results['stability'] = self._analyze_stability_silent(intervals_hours)
+        except Exception:
+            results['stability'] = {'is_stable': True, 'stability_score': 50}
+        
+        try:
+            results['temporal'] = self._analyze_temporal_patterns_silent(df)
+        except Exception:
+            results['temporal'] = {'hourly_concentration': 0, 'daily_concentration': 0, 'peak_hours': [], 'peak_days': []}
+        
+        try:
+            results['bursts'] = self._detect_bursts_silent(intervals_hours)
+        except Exception:
+            results['bursts'] = {'n_bursts': 0, 'has_bursts': False}
+        
+        try:
+            results['contextual'] = self._analyze_contextual_dependencies_silent(df)
+        except Exception:
+            results['contextual'] = {'holiday_correlation': 0, 'weekend_correlation': 0}
         
         # Calcular score final
         final_score, classification = self._calculate_final_score(results)
@@ -1035,7 +1085,14 @@ class AdvancedRecurrenceAnalyzer:
         fig.update_layout(title="Autocorrelação", height=300)
         st.plotly_chart(fig, use_container_width=True, key='autocorr')
         
-        return {'peaks': significant_peaks, 'has_autocorr': len(significant_peaks) > 0}
+        # Calcular max autocorrelation para o score
+        max_autocorr = max([corr for _, corr in significant_peaks], default=0)
+        
+        return {
+            'peaks': significant_peaks, 
+            'has_autocorr': len(significant_peaks) > 0,
+            'max_autocorr': max_autocorr
+        }
     
     def _analyze_temporal_patterns(self, df):
         """Análise de padrões temporais"""
@@ -1774,24 +1831,32 @@ class AdvancedRecurrenceAnalyzer:
             return {'is_stable': True, 'stability_score': 50}
     
     def _analyze_temporal_patterns_silent(self, df):
-        hourly = df.groupby('hour').size()
-        daily = df.groupby('day_of_week').size()
-        
-        hourly_pct = (hourly / hourly.sum() * 100) if hourly.sum() > 0 else pd.Series()
-        daily_pct = (daily / daily.sum() * 100) if daily.sum() > 0 else pd.Series()
-        
-        hourly_conc = hourly_pct.nlargest(3).sum() if len(hourly_pct) > 0 else 0
-        daily_conc = daily_pct.nlargest(3).sum() if len(daily_pct) > 0 else 0
-        
-        peak_hours = hourly[hourly > hourly.mean() + hourly.std()].index.tolist() if len(hourly) > 0 else []
-        peak_days = daily[daily > daily.mean() + daily.std()].index.tolist() if len(daily) > 0 else []
-        
-        return {
-            'hourly_concentration': hourly_conc,
-            'daily_concentration': daily_conc,
-            'peak_hours': peak_hours,
-            'peak_days': peak_days
-        }
+        try:
+            hourly = df.groupby('hour').size()
+            daily = df.groupby('day_of_week').size()
+            
+            hourly_pct = (hourly / hourly.sum() * 100) if hourly.sum() > 0 else pd.Series()
+            daily_pct = (daily / daily.sum() * 100) if daily.sum() > 0 else pd.Series()
+            
+            hourly_conc = hourly_pct.nlargest(3).sum() if len(hourly_pct) > 0 else 0
+            daily_conc = daily_pct.nlargest(3).sum() if len(daily_pct) > 0 else 0
+            
+            peak_hours = hourly[hourly > hourly.mean() + hourly.std()].index.tolist() if len(hourly) > 0 else []
+            peak_days = daily[daily > daily.mean() + daily.std()].index.tolist() if len(daily) > 0 else []
+            
+            return {
+                'hourly_concentration': hourly_conc,
+                'daily_concentration': daily_conc,
+                'peak_hours': peak_hours,
+                'peak_days': peak_days
+            }
+        except Exception:
+            return {
+                'hourly_concentration': 0,
+                'daily_concentration': 0,
+                'peak_hours': [],
+                'peak_days': []
+            }
     
     def _detect_bursts_silent(self, intervals):
         if len(intervals) < 5:
@@ -1810,18 +1875,24 @@ class AdvancedRecurrenceAnalyzer:
     
     def _analyze_contextual_dependencies_silent(self, df):
         try:
-            br_holidays = holidays.Brazil(years=df['created_on'].dt.year.unique())
-            df['is_holiday'] = df['created_on'].dt.date.apply(lambda x: x in br_holidays)
-        except:
-            df['is_holiday'] = False
-        
-        weekend_days = df[df['is_weekend']]
-        holiday_days = df[df['is_holiday']]
-        
-        return {
-            'holiday_correlation': len(holiday_days) / len(df) if len(df) > 0 else 0,
-            'weekend_correlation': len(weekend_days) / len(df) if len(df) > 0 else 0
-        }
+            try:
+                br_holidays = holidays.Brazil(years=df['created_on'].dt.year.unique())
+                df['is_holiday'] = df['created_on'].dt.date.apply(lambda x: x in br_holidays)
+            except:
+                df['is_holiday'] = False
+            
+            weekend_days = df[df['is_weekend']] if 'is_weekend' in df.columns else pd.DataFrame()
+            holiday_days = df[df['is_holiday']]
+            
+            return {
+                'holiday_correlation': len(holiday_days) / len(df) if len(df) > 0 else 0,
+                'weekend_correlation': len(weekend_days) / len(df) if len(df) > 0 else 0
+            }
+        except Exception:
+            return {
+                'holiday_correlation': 0,
+                'weekend_correlation': 0
+            }
     
     # ============================================================
     # CLASSIFICAÇÃO FINAL COM REGRAS CUSTOMIZADAS
@@ -1829,6 +1900,14 @@ class AdvancedRecurrenceAnalyzer:
     
     def _calculate_final_score(self, results):
         """Calcula score final - CRITÉRIOS REVISADOS"""
+        # Calcular score de autocorrelação
+        autocorr_score = 0
+        if 'autocorr' in results:
+            if 'max_autocorr' in results['autocorr']:
+                autocorr_score = results['autocorr']['max_autocorr'] * 100
+            elif 'has_autocorr' in results['autocorr']:
+                autocorr_score = 100 if results['autocorr']['has_autocorr'] else 0
+        
         scores = {
             'regularity': results['regularity']['regularity_score'] * 0.25,
             'periodicity': (
@@ -1838,7 +1917,7 @@ class AdvancedRecurrenceAnalyzer:
             ) * 0.25,
             'predictability': results['predictability']['predictability_score'] * 0.20,
             'determinism': (100 - results['randomness']['overall_randomness_score']) * 0.15,
-            'autocorrelation': (results['autocorr']['max_autocorr'] * 100) * 0.10,
+            'autocorrelation': autocorr_score * 0.10,
             'stability': results.get('stability', {}).get('stability_score', 50) * 0.05
         }
         
@@ -1892,12 +1971,21 @@ class AdvancedRecurrenceAnalyzer:
             st.metric("Score de Reincidência", f"{final_score:.0f}/100")
             
             st.markdown("#### 📊 Breakdown")
+            
+            # Calcular score de autocorrelação corretamente
+            autocorr_score = 0
+            if 'autocorr' in results:
+                if 'max_autocorr' in results['autocorr']:
+                    autocorr_score = results['autocorr']['max_autocorr'] * 100
+                elif 'has_autocorr' in results['autocorr']:
+                    autocorr_score = 100 if results['autocorr']['has_autocorr'] else 0
+            
             breakdown = {
                 'Regularidade (25%)': results['regularity']['regularity_score'] * 0.25,
                 'Periodicidade (25%)': (100 if results['periodicity'].get('has_strong_periodicity', False) else 0) * 0.25,
                 'Previsibilidade (20%)': results['predictability']['predictability_score'] * 0.20,
                 'Determinismo (15%)': (100 - results['randomness']['overall_randomness_score']) * 0.15,
-                'Autocorrelação (10%)': (results['autocorr'].get('has_autocorr', False) * 100) * 0.10,
+                'Autocorrelação (10%)': autocorr_score * 0.10,
                 'Estabilidade (5%)': results['stability'].get('stability_score', 50) * 0.05
             }
             
