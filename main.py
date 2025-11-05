@@ -881,13 +881,13 @@ class AdvancedRecurrenceAnalyzer:
         final_score, classification = self._calculate_final_score_validated(results, df, intervals)
 
         if final_score >= 70:
-            level, color, priority, recommendation = "CRÍTICO", "red", "P1", "**Ação Imediata:** Criar automação, runbook e investigar causa raiz"
+            level, color, priority,  = "CRÍTICO", "red", "P1"
         elif final_score >= 50:
-            level, color, priority, recommendation = "ALTO", "orange", "P2", "**Ação Recomendada:** Monitorar evolução e considerar automação"
+            level, color, priority,  = "ALTO", "orange", "P2"
         elif final_score >= 35:
-            level, color, priority, recommendation = "MÉDIO", "yellow", "P3", "**Ação Sugerida:** Documentar padrão e revisar thresholds"
+            level, color, priority,  = "MÉDIO", "yellow", "P3" 
         else:
-            level, color, priority, recommendation = "BAIXO", "green", "P4", "**Ação:** Análise caso a caso"
+            level, color, priority,  = "BAIXO", "green", "P4"
 
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -927,15 +927,6 @@ class AdvancedRecurrenceAnalyzer:
             for criterion, points in breakdown.items():
                 st.write(f"• {criterion}: **{points:.1f} pts**")
 
-            st.markdown("---")
-            st.markdown("**💡 Justificativa dos Critérios:**")
-            st.write("✅ **Regularidade**: Mede consistência dos intervalos")
-            st.write("✅ **Periodicidade**: Detecta ciclos via FFT")
-            st.write("✅ **Previsibilidade**: Indica se podemos prever próxima ocorrência")
-            st.write("✅ **Concentração Temporal**: Horários/dias fixos são forte indicador")
-            st.write("✅ **Frequência Absoluta**: Volume importa (3 em 1 ano ≠ reincidente)")
-            st.write("✅ **Bursts**: Rajadas são padrão importante")
-            st.info(recommendation)
 
         with col2:
             fig = go.Figure(go.Indicator(mode="gauge+number", value=final_score, title={'text': "Score Final"}, gauge={'axis': {'range': [0, 100]}, 'bar': {'color': color}}))
